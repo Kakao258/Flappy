@@ -6,6 +6,11 @@ fenetre = pygame.display.set_mode((largeur, hauteur))
 clock = pygame.time.Clock()
 pygame.display.set_caption("Flappy Bird")
 
+# Dossiers
+IMG_DIR = "Skin"
+BG_DIR = "Fond"
+SOUND_DIR = "sounds"
+
 # Couleurs
 BLEU_CIEL = (135, 206, 250)
 VERT = (0, 200, 0)
@@ -43,12 +48,12 @@ btn_skin_rect = pygame.Rect(largeur // 2 - btn_w // 2, 310, btn_w, btn_h)
 btn_quit_rect = pygame.Rect(largeur // 2 - btn_w // 2, 380, btn_w, btn_h)
 btn_admin_rect = pygame.Rect(largeur - 110, 10, 100, 40)
 
-# Skins (taille ajustée)
+# Skins (avec bons dossiers)
 skins = {
-    "Jaune": {"bird": "flappo.png", "bg": "fond.png", "prix": 0, "taille": 50},
-    "Rouge": {"bird": "viocr.png", "bg": "tracteur.jpg", "prix": 10, "taille": 40},
-    "Bleu": {"bird": "skibidi.png", "bg": "skibidi fond.jpg", "prix": 15, "taille": 40},
-    "Violet": {"bird": "skouizi.png", "bg": "squeezie fond.jpg", "prix": 20, "taille": 40}
+    "Jaune": {"bird": os.path.join(IMG_DIR, "flappo.png"), "bg": os.path.join(BG_DIR, "fond.png"), "prix": 0, "taille": 45},
+    "Rouge": {"bird": os.path.join(IMG_DIR, "viocr.png"), "bg": os.path.join(BG_DIR, "tracteur.jpg"), "prix": 10, "taille": 45},
+    "Bleu": {"bird": os.path.join(IMG_DIR, "skibidi.png"), "bg": os.path.join(BG_DIR, "skibidi fond.jpg"), "prix": 15, "taille": 45},
+    "Violet": {"bird": os.path.join(IMG_DIR, "skouizi.png"), "bg": os.path.join(BG_DIR, "squeezie fond.jpg"), "prix": 20, "taille": 45}
 }
 
 # Sauvegarde
@@ -68,9 +73,9 @@ else:
 skin_sounds = {}
 for name in skins.keys():
     skin_sounds[name] = {
-        "score": pygame.mixer.Sound("sounds/point.wav") if os.path.exists("sounds/point.wav") else None,
-        "flap": pygame.mixer.Sound("sounds/wing.wav") if os.path.exists("sounds/wing.wav") else None,
-        "hit": pygame.mixer.Sound("sounds/thud sound effect.wav") if os.path.exists("sounds/thud sound effect.wav") else None,
+        "score": pygame.mixer.Sound(os.path.join(SOUND_DIR, "point.wav")) if os.path.exists(os.path.join(SOUND_DIR, "point.wav")) else None,
+        "flap": pygame.mixer.Sound(os.path.join(SOUND_DIR, "wing.wav")) if os.path.exists(os.path.join(SOUND_DIR, "wing.wav")) else None,
+        "hit": pygame.mixer.Sound(os.path.join(SOUND_DIR, "thud sound effect.wav")) if os.path.exists(os.path.join(SOUND_DIR, "thud sound effect.wav")) else None,
     }
 
 # Images
@@ -166,7 +171,7 @@ while True:
             save_game()
             pygame.quit(); sys.exit()
 
-        # ÉTATS
+        # États
         if state == STATE_MENU:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE: reset_game(); state = STATE_PLAY
@@ -215,20 +220,21 @@ while True:
         for t in tuyaux: t.x -= vitesse_scroll
         for p in pieces_en_jeu: p.x -= vitesse_scroll
 
-        # ajouter tuyaux
+        # Ajouter tuyaux
         espacement = ESPACEMENT_BASE + int(vitesse_scroll*ESPACEMENT_VITESSE/10)
         if tuyaux[-2].x < largeur - espacement: tuyaux.extend(creer_tuyau())
-        # ajouter pièces aléatoirement
+
+        # Ajouter pièces aléatoires
         if random.random() < 0.01: pieces_en_jeu.append(creer_piece())
 
-        # suppression tuyaux passés
+        # Suppression tuyaux passés
         if tuyaux[0].x < -60:
             tuyaux = tuyaux[2:]
             score += 1
             tuyaux_passes += 1
             vitesse_scroll = vitesse_base + tuyaux_passes*0.1  # accélération progressive
 
-        # collision oiseau-tuyaux
+        # Collision oiseau-tuyaux
         taille_skin = skins[skin_couleur]["taille"]
         hitbox_w, hitbox_h = int(taille_skin*0.7), int(taille_skin*0.7)
         oiseau_rect = pygame.Rect(oiseau_x + (taille_skin-hitbox_w)//2, int(oiseau_y)+(taille_skin-hitbox_h)//2, hitbox_w, hitbox_h)
@@ -238,7 +244,7 @@ while True:
             if skin_sounds[skin_couleur]["hit"]: skin_sounds[skin_couleur]["hit"].play()
             if score > highscore: highscore = score; save_game()
 
-        # collision pièces
+        # Collision pièces
         for p in pieces_en_jeu[:]:
             if oiseau_rect.colliderect(p):
                 pieces += 1
@@ -247,7 +253,7 @@ while True:
                 save_game()
 
     # -----------------------
-    # RENDU
+    # Rendu
     fenetre.blit(skin_images[skin_couleur]["bg"], (0,0))
 
     # MENU
