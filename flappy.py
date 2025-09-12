@@ -48,7 +48,7 @@ btn_skin_rect = pygame.Rect(largeur // 2 - btn_w // 2, 310, btn_w, btn_h)
 btn_quit_rect = pygame.Rect(largeur // 2 - btn_w // 2, 380, btn_w, btn_h)
 btn_admin_rect = pygame.Rect(largeur - 110, 10, 100, 40)
 
-# Skins (avec bons dossiers)
+# Skins
 skins = {
     "Jaune": {"bird": os.path.join(IMG_DIR, "flappo.png"), "bg": os.path.join(BG_DIR, "fond.png"), "prix": 0, "taille": 45},
     "Rouge": {"bird": os.path.join(IMG_DIR, "viocr.png"), "bg": os.path.join(BG_DIR, "tracteur.jpg"), "prix": 10, "taille": 45},
@@ -138,7 +138,7 @@ def reset_game():
     global oiseau_x, oiseau_y, vitesse, tuyaux, score, vitesse_scroll, pieces_en_jeu, tuyaux_passes
     oiseau_x = 100
     oiseau_y = hauteur // 2
-    vitesse = 0
+    vitesse = saut   # petit saut auto au départ
     tuyaux = []
     pieces_en_jeu = []
     tuyaux.extend(creer_tuyau(premier=True))
@@ -232,7 +232,9 @@ while True:
             tuyaux = tuyaux[2:]
             score += 1
             tuyaux_passes += 1
-            vitesse_scroll = vitesse_base + tuyaux_passes*0.1  # accélération progressive
+            # accélération seulement tous les 3 tuyaux
+            if tuyaux_passes % 3 == 0:
+                vitesse_scroll += 0.1
 
         # Collision oiseau-tuyaux
         taille_skin = skins[skin_couleur]["taille"]
@@ -271,7 +273,8 @@ while True:
     elif state == STATE_PLAY:
         fenetre.blit(skin_images[skin_couleur]["bird"], (oiseau_x, int(oiseau_y)))
         for t in tuyaux: pygame.draw.rect(fenetre, VERT, t)
-        for p in pieces_en_jeu: pygame.draw.rect(fenetre, ORANGE, p)
+        for p in pieces_en_jeu:
+            pygame.draw.circle(fenetre, ORANGE, p.center, PIECE_SIZE//2)  # rond
         draw_text_center(fenetre, str(score), font, NOIR, 20)
         draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 50)
         draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 80)
