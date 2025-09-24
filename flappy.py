@@ -10,6 +10,7 @@ pygame.display.set_caption("Flappy Bird")
 IMG_DIR = "Skin"
 BG_DIR = "Fond"
 SOUND_DIR = "sounds"
+MUSIC_DIR = "music"
 
 # Couleurs
 BLEU_CIEL = (135, 206, 250)
@@ -42,8 +43,9 @@ STATE_ADMIN = "ADMIN"
 STATE_PARAMS = "PARAMS"
 state = STATE_MENU
 
-# Volume musique
+# Volume musique et SFX
 musique_volume = 1.0
+sfx_volume = 1.0
 
 # Boutons
 btn_w, btn_h = 200, 50
@@ -56,9 +58,9 @@ btn_admin_rect = pygame.Rect(largeur - 110, 10, 100, 40)
 # Skins
 skins = {
     "Jaune": {"bird": os.path.join(IMG_DIR, "flappo.png"), "bg": os.path.join(BG_DIR, "fond.png"), "prix": 0, "taille": 45},
-    "Rouge": {"bird": os.path.join(IMG_DIR, "viocr.png"), "bg": os.path.join(BG_DIR, "tracteur.jpg"), "prix": 10, "taille": 45},
-    "Bleu": {"bird": os.path.join(IMG_DIR, "skibidi.png"), "bg": os.path.join(BG_DIR, "skibidi fond.jpg"), "prix": 15, "taille": 45},
-    "Violet": {"bird": os.path.join(IMG_DIR, "skouizi.png"), "bg": os.path.join(BG_DIR, "squeezie fond.jpg"), "prix": 20, "taille": 45}
+    "Rouge": {"bird": os.path.join(IMG_DIR, "ruby.png"), "bg": os.path.join(BG_DIR, "fond.png"), "prix": 10, "taille": 45},
+    "Bleu": {"bird": os.path.join(IMG_DIR, "skibidi.png"), "bg": os.path.join(BG_DIR, "fond.png"), "prix": 15, "taille": 45},
+    "Violet": {"bird": os.path.join(IMG_DIR, "skouizi.png"), "bg": os.path.join(BG_DIR, "fond.png"), "prix": 20, "taille": 45}
 }
 
 # Sauvegarde
@@ -71,19 +73,14 @@ if os.path.exists(save_file):
     skin_couleur = data.get("skin_couleur", "Jaune")
     skins_achetes = set(data.get("skins_achetes", ["Jaune"]))
     musique_volume = data.get("musique_volume", 1.0)
+    sfx_volume = data.get("sfx_volume", 1.0)
 else:
     highscore = 0
     pieces = 0
     skin_couleur = "Jaune"
     skins_achetes = {"Jaune"}
     musique_volume = 1.0
-
-# Musique de fond
-music_path = os.path.join(SOUND_DIR, "musique.mp3")
-if os.path.exists(music_path):
-    pygame.mixer.music.load(music_path)
-    pygame.mixer.music.set_volume(musique_volume)
-    pygame.mixer.music.play(-1)
+    sfx_volume = 1.0
 
 # Sons
 skin_sounds = {}
@@ -94,6 +91,38 @@ for name in skins.keys():
         "hit": pygame.mixer.Sound(os.path.join(SOUND_DIR, "thud sound effect.wav")) if os.path.exists(os.path.join(SOUND_DIR, "thud sound effect.wav")) else None,
     }
 
+def apply_volume():
+    try:
+        pygame.mixer.music.set_volume(musique_volume)
+    except Exception:
+        pass
+    for sdict in skin_sounds.values():
+        for snd in sdict.values():
+            if snd is not None:
+                try:
+                    snd.set_volume(sfx_volume)
+                except Exception:
+                    pass
+
+# Musique personnalisée skin
+def play_skin_music(skin_name):
+    pygame.mixer.music.stop()
+    if skin_name == "Rouge":
+        music_file = os.path.join(MUSIC_DIR, "angry_bird.wav")
+        if os.path.exists(music_file):
+            try:
+                pygame.mixer.music.load(music_file)
+                pygame.mixer.music.play(-1)
+                pygame.mixer.music.set_volume(musique_volume)
+            except Exception:
+                pass
+    else:
+        pygame.mixer.music.stop()
+
+# Jouer musique au démarrage selon le skin sauvegardé
+play_skin_music(skin_couleur)
+
+# ----------------------------------------------------
 # Images
 skin_images = {}
 skin_buttons = []
@@ -113,11 +142,11 @@ for i, (name, assets) in enumerate(skins.items()):
         bg_img.fill(BLEU_CIEL)
     skin_images[name] = {"bird": bird_img, "bg": bg_img}
 
-    # Boutons skins
     x = 80 + i * (taille + 20)
     rect = pygame.Rect(x, 250, taille, taille)
     skin_buttons.append((rect, name))
 
+# ----------------------------------------------------
 # Variables jeu
 oiseau_x = 100
 oiseau_y = hauteur // 2
@@ -128,12 +157,10 @@ score = 0
 vitesse_scroll = vitesse_base
 tuyaux_passes = 0
 PIECE_SIZE = 20
-
-# Espacement tuyaux
 ESPACEMENT_BASE = 300
 ESPACEMENT_VITESSE = 50
 
-# Fonctions
+# Fonctions de jeu
 def save_game():
     with open(save_file, "w") as f:
         json.dump({
@@ -141,7 +168,8 @@ def save_game():
             "pieces": pieces,
             "skin_couleur": skin_couleur,
             "skins_achetes": list(skins_achetes),
-            "musique_volume": musique_volume
+            "musique_volume": musique_volume,
+            "sfx_volume": sfx_volume
         }, f)
 
 def creer_tuyau(premier=False):
@@ -165,8 +193,9 @@ def reset_game():
     pieces_en_jeu = []
     tuyaux.extend(creer_tuyau(premier=True))
     tuyaux.extend(creer_tuyau())
-    tuyaux[2].x += 300
-    tuyaux[3].x += 300
+    if len(tuyaux) >= 4:
+        tuyaux[2].x += 300
+        tuyaux[3].x += 300
     score = 0
     vitesse_scroll = vitesse_base
     tuyaux_passes = 0
@@ -206,23 +235,11 @@ while True:
                 elif btn_quit_rect.collidepoint(event.pos): pygame.quit(); sys.exit()
                 elif btn_admin_rect.collidepoint(event.pos): state = STATE_ADMIN
 
-        elif state == STATE_PARAMS:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                state = STATE_MENU
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                vol_plus_rect = pygame.Rect(largeur//2 + 80, 250, 40, 40)
-                vol_moins_rect = pygame.Rect(largeur//2 - 120, 250, 40, 40)
-                if vol_plus_rect.collidepoint(event.pos) and musique_volume < 1.0:
-                    musique_volume = min(1.0, musique_volume + 0.05)
-                    pygame.mixer.music.set_volume(musique_volume)
-                if vol_moins_rect.collidepoint(event.pos) and musique_volume > 0:
-                    musique_volume = max(0, musique_volume - 0.05)
-                    pygame.mixer.music.set_volume(musique_volume)
-
         elif state == STATE_PLAY:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 vitesse = saut
-                if skin_sounds[skin_couleur]["flap"]: skin_sounds[skin_couleur]["flap"].play()
+                if skin_sounds.get(skin_couleur, {}).get("flap"):
+                    skin_sounds[skin_couleur]["flap"].play()
 
         elif state == STATE_OVER:
             if event.type == pygame.KEYDOWN:
@@ -236,53 +253,107 @@ while True:
                     if rect.collidepoint(event.pos):
                         if name in skins_achetes:
                             skin_couleur = name
+                            play_skin_music(name)
                             save_game()
                             state = STATE_MENU
                         elif pieces >= skins[name]["prix"]:
                             pieces -= skins[name]["prix"]
                             skin_couleur = name
                             skins_achetes.add(name)
+                            play_skin_music(name)
                             save_game()
                             state = STATE_MENU
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE: state = STATE_MENU
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                state = STATE_MENU
 
         elif state == STATE_ADMIN:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if pygame.Rect(50,500,120,40).collidepoint(event.pos): pieces += 10; save_game()
-                if pygame.Rect(200,500,120,40).collidepoint(event.pos): pieces = 0; save_game()
-                if btn_admin_rect.collidepoint(event.pos): highscore = 0; save_game()
-                if pygame.Rect(125,550,150,40).collidepoint(event.pos): skins_achetes = {"Jaune"}; save_game()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE: state = STATE_MENU
+                if pygame.Rect(50,500,120,40).collidepoint(event.pos):
+                    pieces += 10; save_game()
+                if pygame.Rect(200,500,120,40).collidepoint(event.pos):
+                    pieces = 0; save_game()
+                if btn_admin_rect.collidepoint(event.pos):
+                    highscore = 0; save_game()
+                if pygame.Rect(125,550,150,40).collidepoint(event.pos):
+                    skins_achetes = {"Jaune"}; save_game()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                state = STATE_MENU
+
+        elif state == STATE_PARAMS:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                state = STATE_MENU
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # Rectangles pour boutons volumes
+                vol_plus_mus_rect = pygame.Rect(largeur//2 + 80, 250, 40, 40)
+                vol_moins_mus_rect = pygame.Rect(largeur//2 - 120, 250, 40, 40)
+                vol_plus_sfx_rect = pygame.Rect(largeur//2 + 80, 300, 40, 40)
+                vol_moins_sfx_rect = pygame.Rect(largeur//2 - 120, 300, 40, 40)
+
+                # Musique
+                if vol_plus_mus_rect.collidepoint(event.pos) and musique_volume < 1.0:
+                    musique_volume = min(1.0, round(musique_volume + 0.05, 2))
+                    apply_volume()
+                    save_game()
+                elif vol_moins_mus_rect.collidepoint(event.pos) and musique_volume > 0.0:
+                    musique_volume = max(0.0, round(musique_volume - 0.05, 2))
+                    apply_volume()
+                    save_game()
+                # SFX
+                elif vol_plus_sfx_rect.collidepoint(event.pos) and sfx_volume < 1.0:
+                    sfx_volume = min(1.0, round(sfx_volume + 0.05, 2))
+                    apply_volume()
+                    save_game()
+                elif vol_moins_sfx_rect.collidepoint(event.pos) and sfx_volume > 0.0:
+                    sfx_volume = max(0.0, round(sfx_volume - 0.05, 2))
+                    apply_volume()
+                    save_game()
 
     # -----------------------
     # LOGIQUE
     if state == STATE_PLAY:
         vitesse += gravite
         oiseau_y += vitesse
+
         for t in tuyaux: t.x -= vitesse_scroll
         for p in pieces_en_jeu: p.x -= vitesse_scroll
+
+        # Ajouter tuyaux
         espacement = ESPACEMENT_BASE + int(vitesse_scroll*ESPACEMENT_VITESSE/10)
-        if tuyaux[-2].x < largeur - espacement: tuyaux.extend(creer_tuyau())
-        if random.random() < 0.01: pieces_en_jeu.append(creer_piece())
-        if tuyaux[0].x < -60:
+        if len(tuyaux) >= 2 and tuyaux[-2].x < largeur - espacement:
+            tuyaux.extend(creer_tuyau())
+
+        # Ajouter pièces aléatoires
+        if random.random() < 0.01:
+            pieces_en_jeu.append(creer_piece())
+
+        # Suppression tuyaux passés
+        if len(tuyaux) >= 2 and tuyaux[0].x < -60:
             tuyaux = tuyaux[2:]
             score += 1
             tuyaux_passes += 1
-            if tuyaux_passes % 3 == 0: vitesse_scroll += 0.1
+            if tuyaux_passes % 3 == 0:
+                vitesse_scroll += 0.1
 
+        # Collision oiseau-tuyaux
         taille_skin = skins[skin_couleur]["taille"]
         hitbox_w, hitbox_h = int(taille_skin*0.7), int(taille_skin*0.7)
         oiseau_rect = pygame.Rect(oiseau_x + (taille_skin-hitbox_w)//2, int(oiseau_y)+(taille_skin-hitbox_h)//2, hitbox_w, hitbox_h)
+
         if oiseau_y > hauteur or any(oiseau_rect.colliderect(t) for t in tuyaux):
             state = STATE_OVER
-            if skin_sounds[skin_couleur]["hit"]: skin_sounds[skin_couleur]["hit"].play()
-            if score > highscore: highscore = score; save_game()
+            if skin_sounds.get(skin_couleur, {}).get("hit"):
+                skin_sounds[skin_couleur]["hit"].play()
+            if score > highscore:
+                highscore = score
+                save_game()
 
+        # Collision pièces
         for p in pieces_en_jeu[:]:
             if oiseau_rect.colliderect(p):
                 pieces += 1
                 pieces_en_jeu.remove(p)
-                if skin_sounds[skin_couleur]["score"]: skin_sounds[skin_couleur]["score"].play()
+                if skin_sounds.get(skin_couleur, {}).get("score"):
+                    skin_sounds[skin_couleur]["score"].play()
                 save_game()
 
     # -----------------------
@@ -305,7 +376,8 @@ while True:
     elif state == STATE_PLAY:
         fenetre.blit(skin_images[skin_couleur]["bird"], (oiseau_x, int(oiseau_y)))
         for t in tuyaux: pygame.draw.rect(fenetre, VERT, t)
-        for p in pieces_en_jeu: pygame.draw.circle(fenetre, ORANGE, p.center, PIECE_SIZE//2)
+        for p in pieces_en_jeu:
+            pygame.draw.circle(fenetre, ORANGE, p.center, PIECE_SIZE//2)
         draw_text_center(fenetre, str(score), font, NOIR, 20)
         draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 50)
         draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 80)
@@ -324,7 +396,7 @@ while True:
     elif state == STATE_SKINS:
         draw_text_center(fenetre, "Choisissez un skin", font, NOIR, 150)
         draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 200)
-        for i, (rect, name) in enumerate(skin_buttons):
+        for rect, name in skin_buttons:
             fenetre.blit(skin_images[name]["bird"], (rect.x, rect.y))
             pygame.draw.rect(fenetre, NOIR, rect, 2)
             if name not in skins_achetes:
@@ -339,18 +411,34 @@ while True:
         draw_button(pygame.Rect(200,500,120,40), "Reset pcs", False, font_admin)
         draw_button(btn_admin_rect, "Reset HS", False, font_admin)
         draw_button(pygame.Rect(125,550,150,40), "Reset Skins", False, font_admin)
-        draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 180)
-        draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 220)
-        draw_text_center(fenetre, f"Skins: {', '.join(skins_achetes)}", font_small, NOIR, 260)
+        draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 200)
+        draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 240)
 
     # PARAMS
     elif state == STATE_PARAMS:
-        draw_text_center(fenetre, "Paramètres", font_big, NOIR, 150)
-        draw_text_center(fenetre, f"Volume: {int(musique_volume*100)}%", font_small, NOIR, 200)
-        vol_plus_rect = pygame.Rect(largeur//2 + 80, 250, 40, 40)
-        vol_moins_rect = pygame.Rect(largeur//2 - 120, 250, 40, 40)
-        draw_button(vol_plus_rect, "+", vol_plus_rect.collidepoint(mouse_pos))
-        draw_button(vol_moins_rect, "-", vol_moins_rect.collidepoint(mouse_pos))
+        draw_text_center(fenetre, "Paramètres", font_big, NOIR, 120)
+
+        # Musique
+        vol_plus_mus_rect = pygame.Rect(largeur//2 + 80, 250, 40, 40)
+        vol_moins_mus_rect = pygame.Rect(largeur//2 - 120, 250, 40, 40)
+        draw_button(vol_plus_mus_rect, "+", vol_plus_mus_rect.collidepoint(mouse_pos))
+        draw_button(vol_moins_mus_rect, "-", vol_moins_mus_rect.collidepoint(mouse_pos))
+        # Texte à gauche et % à droite du +
+        txt_musique = font_small.render("Musique", True, NOIR)
+        txt_musique_val = font_small.render(f"{int(musique_volume*100)}%", True, NOIR)
+        fenetre.blit(txt_musique, (vol_moins_mus_rect.x - txt_musique.get_width() - 10, vol_moins_mus_rect.y + 5))
+        fenetre.blit(txt_musique_val, (vol_plus_mus_rect.x + vol_plus_mus_rect.width + 10, vol_plus_mus_rect.y + 5))
+
+        # SFX
+        vol_plus_sfx_rect = pygame.Rect(largeur//2 + 80, 300, 40, 40)
+        vol_moins_sfx_rect = pygame.Rect(largeur//2 - 120, 300, 40, 40)
+        draw_button(vol_plus_sfx_rect, "+", vol_plus_sfx_rect.collidepoint(mouse_pos))
+        draw_button(vol_moins_sfx_rect, "-", vol_moins_sfx_rect.collidepoint(mouse_pos))
+        txt_sfx = font_small.render("SFX", True, NOIR)
+        txt_sfx_val = font_small.render(f"{int(sfx_volume*100)}%", True, NOIR)
+        fenetre.blit(txt_sfx, (vol_moins_sfx_rect.x - txt_sfx.get_width() - 10, vol_moins_sfx_rect.y + 5))
+        fenetre.blit(txt_sfx_val, (vol_plus_sfx_rect.x + vol_plus_sfx_rect.width + 10, vol_plus_sfx_rect.y + 5))
+
         draw_text_center(fenetre, "ESC = Retour", font_small, NOIR, 350)
 
     pygame.display.flip()
