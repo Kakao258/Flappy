@@ -47,6 +47,10 @@ state = STATE_MENU
 musique_volume = 1.0
 sfx_volume = 1.0
 
+# Mode auto
+auto_mode = False
+jeu_auto = False
+
 # Boutons
 btn_w, btn_h = 200, 50
 btn_play_rect = pygame.Rect(largeur // 2 - btn_w // 2, 240, btn_w, btn_h)
@@ -54,6 +58,7 @@ btn_skin_rect = pygame.Rect(largeur // 2 - btn_w // 2, 310, btn_w, btn_h)
 btn_param_rect = pygame.Rect(largeur // 2 - btn_w // 2, 380, btn_w, btn_h)
 btn_quit_rect = pygame.Rect(largeur // 2 - btn_w // 2, 450, btn_w, btn_h)
 btn_admin_rect = pygame.Rect(largeur - 110, 10, 100, 40)
+btn_auto_rect = pygame.Rect(10, 10, 180, 40)  # Bouton Mode Auto un peu plus large
 
 # Skins
 skins = {
@@ -74,6 +79,7 @@ if os.path.exists(save_file):
     skins_achetes = set(data.get("skins_achetes", ["Jaune"]))
     musique_volume = data.get("musique_volume", 1.0)
     sfx_volume = data.get("sfx_volume", 1.0)
+    auto_mode = data.get("auto_mode", False)
 else:
     highscore = 0
     pieces = 0
@@ -81,6 +87,7 @@ else:
     skins_achetes = {"Jaune"}
     musique_volume = 1.0
     sfx_volume = 1.0
+    auto_mode = False
 
 # Sons
 skin_sounds = {}
@@ -119,8 +126,8 @@ def play_skin_music(skin_name):
     else:
         pygame.mixer.music.stop()
 
-# Jouer musique au démarrage selon le skin sauvegardé
 play_skin_music(skin_couleur)
+apply_volume()
 
 # ----------------------------------------------------
 # Images
@@ -160,6 +167,9 @@ PIECE_SIZE = 20
 ESPACEMENT_BASE = 300
 ESPACEMENT_VITESSE = 50
 
+# Variables apprentissage IA
+ia_offset = 0.0  # Ajustement dynamique de l'IA pour apprendre
+
 # Fonctions de jeu
 def save_game():
     with open(save_file, "w") as f:
@@ -169,7 +179,8 @@ def save_game():
             "skin_couleur": skin_couleur,
             "skins_achetes": list(skins_achetes),
             "musique_volume": musique_volume,
-            "sfx_volume": sfx_volume
+            "sfx_volume": sfx_volume,
+            "auto_mode": auto_mode
         }, f)
 
 def creer_tuyau(premier=False):
@@ -185,7 +196,7 @@ def creer_piece():
     return pygame.Rect(x, y, PIECE_SIZE, PIECE_SIZE)
 
 def reset_game():
-    global oiseau_x, oiseau_y, vitesse, tuyaux, score, vitesse_scroll, pieces_en_jeu, tuyaux_passes
+    global oiseau_x, oiseau_y, vitesse, tuyaux, score, vitesse_scroll, pieces_en_jeu, tuyaux_passes, ia_offset
     oiseau_x = 100
     oiseau_y = hauteur // 2
     vitesse = saut
@@ -199,15 +210,17 @@ def reset_game():
     score = 0
     vitesse_scroll = vitesse_base
     tuyaux_passes = 0
+    ia_offset = 0.0
 
 def draw_text_center(surface, texte, police, couleur, y):
     img = police.render(texte, True, couleur)
     x = (largeur - img.get_width()) // 2
     surface.blit(img, (x, y))
 
-def draw_button(rect, texte, hovered=False, font_used=None):
+def draw_button(rect, texte, hovered=False, font_used=None, couleur_fond=None):
     if font_used is None: font_used = font
-    pygame.draw.rect(fenetre, GRIS if not hovered else GRIS_FONCE, rect, border_radius=10)
+    if couleur_fond is None: couleur_fond = GRIS if not hovered else GRIS_FONCE
+    pygame.draw.rect(fenetre, couleur_fond, rect, border_radius=10)
     pygame.draw.rect(fenetre, NOIR, rect, width=2, border_radius=10)
     txt = font_used.render(texte, True, BLANC if hovered else NOIR)
     fenetre.blit(txt, (rect.centerx - txt.get_width() // 2, rect.centery - txt.get_height() // 2))
@@ -222,28 +235,36 @@ while True:
             save_game()
             pygame.quit(); sys.exit()
 
-        # États
         if state == STATE_MENU:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE: reset_game(); state = STATE_PLAY
+                if event.key == pygame.K_SPACE:
+                    reset_game(); jeu_auto = False; state = STATE_PLAY
                 elif event.key == pygame.K_s: state = STATE_SKINS
                 elif event.key == pygame.K_ESCAPE: pygame.quit(); sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if btn_play_rect.collidepoint(event.pos): reset_game(); state = STATE_PLAY
+                if btn_play_rect.collidepoint(event.pos):
+                    reset_game(); jeu_auto = False; state = STATE_PLAY
                 elif btn_skin_rect.collidepoint(event.pos): state = STATE_SKINS
                 elif btn_param_rect.collidepoint(event.pos): state = STATE_PARAMS
                 elif btn_quit_rect.collidepoint(event.pos): pygame.quit(); sys.exit()
                 elif btn_admin_rect.collidepoint(event.pos): state = STATE_ADMIN
+                elif btn_auto_rect.collidepoint(event.pos):
+                    auto_mode = not auto_mode
+                    save_game()
 
         elif state == STATE_PLAY:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                vitesse = saut
-                if skin_sounds.get(skin_couleur, {}).get("flap"):
-                    skin_sounds[skin_couleur]["flap"].play()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                state = STATE_MENU
+            # Les touches normales ne fonctionnent pas si auto_mode = True
+            if not auto_mode:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    vitesse = saut
+                    if skin_sounds.get(skin_couleur, {}).get("flap"):
+                        skin_sounds[skin_couleur]["flap"].play()
 
         elif state == STATE_OVER:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE: reset_game(); state = STATE_PLAY
+                if event.key == pygame.K_SPACE: reset_game(); state = STATE_PLAY; jeu_auto = False
                 elif event.key == pygame.K_BACKSPACE: state = STATE_MENU
                 elif event.key == pygame.K_ESCAPE: pygame.quit(); sys.exit()
 
@@ -313,9 +334,44 @@ while True:
     if state == STATE_PLAY:
         vitesse += gravite
         oiseau_y += vitesse
-
         for t in tuyaux: t.x -= vitesse_scroll
         for p in pieces_en_jeu: p.x -= vitesse_scroll
+
+        # Mode auto intelligent avec anticipation et apprentissage
+        if auto_mode:
+            prochain_tuyau = None
+            for t in tuyaux:
+                if t.x + t.width > oiseau_x:
+                    prochain_tuyau = t
+                    break
+
+            if prochain_tuyau:
+                if prochain_tuyau.top < hauteur / 2:  # tuyau haut
+                    espace_haut = prochain_tuyau.bottom
+                    espace_bas = prochain_tuyau.bottom + 160
+                else:  # tuyau bas
+                    espace_haut = prochain_tuyau.top - 160
+                    espace_bas = prochain_tuyau.top
+
+                centre_espace = (espace_haut + espace_bas) / 2 + ia_offset
+
+                # Anticipation : ajuster si le tuyau est loin
+                distance = prochain_tuyau.x - oiseau_x
+                facteur_anticipe = max(1, distance / 100)
+                cible_y = centre_espace - vitesse * facteur_anticipe
+
+                if oiseau_y + skins[skin_couleur]["taille"]/2 > cible_y:
+                    vitesse = saut
+                    if skin_sounds.get(skin_couleur, {}).get("flap"):
+                        skin_sounds[skin_couleur]["flap"].play()
+
+            # Ajustement dynamique IA (apprentissage simple)
+            if tuyaux_passes > 0 and score > 0 and score % 3 == 0:
+                ia_offset *= 0.95  # réduit petit à petit l’erreur
+            if oiseau_y < 0:
+                vitesse = 2
+            elif oiseau_y + skins[skin_couleur]["taille"] > hauteur:
+                vitesse = saut
 
         # Ajouter tuyaux
         espacement = ESPACEMENT_BASE + int(vitesse_scroll*ESPACEMENT_VITESSE/10)
@@ -331,6 +387,7 @@ while True:
             tuyaux = tuyaux[2:]
             score += 1
             tuyaux_passes += 1
+            ia_offset += random.uniform(-5,5)  # apprentissage par ajustement aléatoire
             if tuyaux_passes % 3 == 0:
                 vitesse_scroll += 0.1
 
@@ -368,6 +425,10 @@ while True:
         draw_button(btn_param_rect, "Paramètres", btn_param_rect.collidepoint(mouse_pos))
         draw_button(btn_quit_rect, "Quitter", btn_quit_rect.collidepoint(mouse_pos))
         draw_button(btn_admin_rect, "ADMIN", btn_admin_rect.collidepoint(mouse_pos), font_admin)
+
+        couleur_auto = VERT if auto_mode else ROUGE
+        draw_button(btn_auto_rect, f"Mode Auto: {'ON' if auto_mode else 'OFF'}", btn_auto_rect.collidepoint(mouse_pos), font_small, couleur_auto)
+
         fenetre.blit(skin_images[skin_couleur]["bird"], (oiseau_x, hauteur//2))
         draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 50)
         draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 80)
@@ -376,11 +437,12 @@ while True:
     elif state == STATE_PLAY:
         fenetre.blit(skin_images[skin_couleur]["bird"], (oiseau_x, int(oiseau_y)))
         for t in tuyaux: pygame.draw.rect(fenetre, VERT, t)
-        for p in pieces_en_jeu:
-            pygame.draw.circle(fenetre, ORANGE, p.center, PIECE_SIZE//2)
+        for p in pieces_en_jeu: pygame.draw.circle(fenetre, ORANGE, p.center, PIECE_SIZE//2)
         draw_text_center(fenetre, str(score), font, NOIR, 20)
         draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 50)
         draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 80)
+        if auto_mode:
+            draw_text_center(fenetre, "MODE AUTO ACTIVÉ", font_small, ROUGE, 10)
 
     # GAME OVER
     elif state == STATE_OVER:
@@ -423,7 +485,6 @@ while True:
         vol_moins_mus_rect = pygame.Rect(largeur//2 - 120, 250, 40, 40)
         draw_button(vol_plus_mus_rect, "+", vol_plus_mus_rect.collidepoint(mouse_pos))
         draw_button(vol_moins_mus_rect, "-", vol_moins_mus_rect.collidepoint(mouse_pos))
-        # Texte à gauche et % à droite du +
         txt_musique = font_small.render("Musique", True, NOIR)
         txt_musique_val = font_small.render(f"{int(musique_volume*100)}%", True, NOIR)
         fenetre.blit(txt_musique, (vol_moins_mus_rect.x - txt_musique.get_width() - 10, vol_moins_mus_rect.y + 5))
@@ -439,6 +500,7 @@ while True:
         fenetre.blit(txt_sfx, (vol_moins_sfx_rect.x - txt_sfx.get_width() - 10, vol_moins_sfx_rect.y + 5))
         fenetre.blit(txt_sfx_val, (vol_plus_sfx_rect.x + vol_plus_sfx_rect.width + 10, vol_plus_sfx_rect.y + 5))
 
+        apply_volume()
         draw_text_center(fenetre, "ESC = Retour", font_small, NOIR, 350)
 
     pygame.display.flip()
