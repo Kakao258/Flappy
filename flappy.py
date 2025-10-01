@@ -337,41 +337,28 @@ while True:
         for t in tuyaux: t.x -= vitesse_scroll
         for p in pieces_en_jeu: p.x -= vitesse_scroll
 
-        # Mode auto intelligent avec anticipation et apprentissage
+        # Mode auto intelligent avec anticipation réelle
         if auto_mode:
-            prochain_tuyau = None
-            for t in tuyaux:
-                if t.x + t.width > oiseau_x:
-                    prochain_tuyau = t
+            prochain_tuyau_pair = None
+            for i in range(0, len(tuyaux), 2):
+                if tuyaux[i].x + tuyaux[i].width > oiseau_x:
+                    prochain_tuyau_pair = (tuyaux[i], tuyaux[i+1])
                     break
 
-            if prochain_tuyau:
-                if prochain_tuyau.top < hauteur / 2:  # tuyau haut
-                    espace_haut = prochain_tuyau.bottom
-                    espace_bas = prochain_tuyau.bottom + 160
-                else:  # tuyau bas
-                    espace_haut = prochain_tuyau.top - 160
-                    espace_bas = prochain_tuyau.top
+            if prochain_tuyau_pair:
+                bas, haut = prochain_tuyau_pair
+                espace_haut = haut.bottom
+                espace_bas = bas.top
+                centre_trou = (espace_haut + espace_bas) / 2
 
-                centre_espace = (espace_haut + espace_bas) / 2 + ia_offset
-
-                # Anticipation : ajuster si le tuyau est loin
-                distance = prochain_tuyau.x - oiseau_x
-                facteur_anticipe = max(1, distance / 100)
-                cible_y = centre_espace - vitesse * facteur_anticipe
-
-                if oiseau_y + skins[skin_couleur]["taille"]/2 > cible_y:
+                marge = 20  # tolérance
+                if oiseau_y + skins[skin_couleur]["taille"]/2 > centre_trou + marge:
                     vitesse = saut
                     if skin_sounds.get(skin_couleur, {}).get("flap"):
                         skin_sounds[skin_couleur]["flap"].play()
-
-            # Ajustement dynamique IA (apprentissage simple)
-            if tuyaux_passes > 0 and score > 0 and score % 3 == 0:
-                ia_offset *= 0.95  # réduit petit à petit l’erreur
-            if oiseau_y < 0:
-                vitesse = 2
-            elif oiseau_y + skins[skin_couleur]["taille"] > hauteur:
-                vitesse = saut
+                elif oiseau_y + skins[skin_couleur]["taille"]/2 < centre_trou - marge:
+                    # Laisse tomber naturellement
+                    pass
 
         # Ajouter tuyaux
         espacement = ESPACEMENT_BASE + int(vitesse_scroll*ESPACEMENT_VITESSE/10)
@@ -386,10 +373,10 @@ while True:
         if len(tuyaux) >= 2 and tuyaux[0].x < -60:
             tuyaux = tuyaux[2:]
             score += 1
-            tuyaux_passes += 1
-            ia_offset += random.uniform(-5,5)  # apprentissage par ajustement aléatoire
-            if tuyaux_passes % 3 == 0:
-                vitesse_scroll += 0.1
+            if not auto_mode:  # Ne pas compter dans le highscore si auto
+                tuyaux_passes += 1
+                if tuyaux_passes % 3 == 0:
+                    vitesse_scroll += 0.1
 
         # Collision oiseau-tuyaux
         taille_skin = skins[skin_couleur]["taille"]
@@ -397,29 +384,35 @@ while True:
         oiseau_rect = pygame.Rect(oiseau_x + (taille_skin-hitbox_w)//2, int(oiseau_y)+(taille_skin-hitbox_h)//2, hitbox_w, hitbox_h)
 
         if oiseau_y > hauteur or any(oiseau_rect.colliderect(t) for t in tuyaux):
+            if not auto_mode and score > highscore:  # Highscore seulement si pas auto
+                highscore = score
             state = STATE_OVER
             if skin_sounds.get(skin_couleur, {}).get("hit"):
                 skin_sounds[skin_couleur]["hit"].play()
-            if score > highscore:
-                highscore = score
+            if not auto_mode:
                 save_game()
 
         # Collision pièces
         for p in pieces_en_jeu[:]:
             if oiseau_rect.colliderect(p):
-                pieces += 1
+                if not auto_mode:
+                    pieces += 1
+                    save_game()
                 pieces_en_jeu.remove(p)
                 if skin_sounds.get(skin_couleur, {}).get("score"):
                     skin_sounds[skin_couleur]["score"].play()
+
                 save_game()
 
     # -----------------------
     # Rendu
+   
+
     fenetre.blit(skin_images[skin_couleur]["bg"], (0,0))
 
     # MENU
     if state == STATE_MENU:
-        draw_text_center(fenetre, "Flappy Bird", font_big, NOIR, 120)
+        draw_text_center(fenetre, "Flappy Bird", font_big, NOIR, 140)
         draw_button(btn_play_rect, "Jouer", btn_play_rect.collidepoint(mouse_pos))
         draw_button(btn_skin_rect, "Skins", btn_skin_rect.collidepoint(mouse_pos))
         draw_button(btn_param_rect, "Paramètres", btn_param_rect.collidepoint(mouse_pos))
@@ -430,17 +423,17 @@ while True:
         draw_button(btn_auto_rect, f"Mode Auto: {'ON' if auto_mode else 'OFF'}", btn_auto_rect.collidepoint(mouse_pos), font_small, couleur_auto)
 
         fenetre.blit(skin_images[skin_couleur]["bird"], (oiseau_x, hauteur//2))
-        draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 50)
-        draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 80)
+        draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 70)
+        draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 100)
 
     # PLAY
     elif state == STATE_PLAY:
         fenetre.blit(skin_images[skin_couleur]["bird"], (oiseau_x, int(oiseau_y)))
         for t in tuyaux: pygame.draw.rect(fenetre, VERT, t)
         for p in pieces_en_jeu: pygame.draw.circle(fenetre, ORANGE, p.center, PIECE_SIZE//2)
-        draw_text_center(fenetre, str(score), font, NOIR, 20)
-        draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 50)
-        draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 80)
+        draw_text_center(fenetre, str(score), font, NOIR, 35)
+        draw_text_center(fenetre, f"Highscore: {highscore}", font_small, NOIR, 70)
+        draw_text_center(fenetre, f"Pieces: {pieces}", font_small, ORANGE, 100)
         if auto_mode:
             draw_text_center(fenetre, "MODE AUTO ACTIVÉ", font_small, ROUGE, 10)
 
