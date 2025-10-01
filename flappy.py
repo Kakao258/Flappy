@@ -80,6 +80,7 @@ if os.path.exists(save_file):
     musique_volume = data.get("musique_volume", 1.0)
     sfx_volume = data.get("sfx_volume", 1.0)
     auto_mode = data.get("auto_mode", False)
+    
 else:
     highscore = 0
     pieces = 0
