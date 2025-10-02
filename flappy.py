@@ -266,8 +266,7 @@ while True:
         elif state == STATE_OVER:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE: reset_game(); state = STATE_PLAY; jeu_auto = False
-                elif event.key == pygame.K_BACKSPACE: state = STATE_MENU
-                elif event.key == pygame.K_ESCAPE: pygame.quit(); sys.exit()
+                elif event.key == pygame.K_ESCAPE: state = STATE_MENU
 
         elif state == STATE_SKINS:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
